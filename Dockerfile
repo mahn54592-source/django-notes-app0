@@ -5,16 +5,13 @@ WORKDIR /app/backend
 COPY requirements.txt /app/backend
 RUN apt-get update \
     && apt-get upgrade -y \
-    && apt-get install -y gcc default-libmysqlclient-dev pkg-config \
+    && apt-get install -y --no-install-recommends gcc \
     && rm -rf /var/lib/apt/lists/*
 
-
-# Install app dependencies
-RUN pip install mysqlclient
+# Install app dependencies (remove mysqlclient if you don't need it)
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . /app/backend
 
 EXPOSE 8000
-#RUN python manage.py migrate
-#RUN python manage.py makemigrations
+CMD ["sh", "-c", "python manage.py migrate --noinput && gunicorn notesapp.wsgi:application --bind 0.0.0.0:8000"]
