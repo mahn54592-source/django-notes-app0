@@ -13,8 +13,8 @@ services:
     networks:
       - notes-app-nw
     volumes:
-      - ./staticfiles:/app/backend/staticfiles  # If you have static files
-      - ./media:/app/backend/media              # If you have media files
+      - ./staticfiles:/app/backend/staticfiles
+      - ./media:/app/backend/media
 
   django_app:
     build:
@@ -22,11 +22,16 @@ services:
     image: django_app
     container_name: "django_cont"
     ports:
-      - "8000:8000"
+      - "8080:8000"  # Changed from 8000:8000 to 8080:8000
+    environment:
+      - USE_SQLITE=True
+      - DEBUG=True
+      - SECRET_KEY=*gt_#g3b2gzz-mmf(tpxu%r1jar7vwf!ygy11df9m8*+e)nrj%
+      - ALLOWED_HOSTS=localhost,127.0.0.1,0.0.0.0
     command: sh -c "python manage.py migrate --noinput && python manage.py collectstatic --noinput && gunicorn notesapp.wsgi --bind 0.0.0.0:8000"
     restart: always
     volumes:
-      - ./db.sqlite3:/app/backend/db.sqlite3  # Persist SQLite database
+      - ./db.sqlite3:/app/backend/db.sqlite3
       - ./staticfiles:/app/backend/staticfiles
       - ./media:/app/backend/media
     networks:
@@ -34,3 +39,4 @@ services:
 
 networks:
   notes-app-nw:
+    driver: bridge  # Added network driver
