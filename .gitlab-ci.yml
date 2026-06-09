@@ -1,0 +1,78 @@
+stages:
+  - build
+  - test
+  - push
+  - deploy
+  
+default:
+  image: docker:latest
+  services:
+    - docker:dind
+#why docker image when i have docker in computer because gitlab-runners are separate machines. they dont have automatically docker install
+
+build_job:
+  stage: build
+  script:
+    - docker build -t $DOCKERHUB_USER/notes-app:n2  -t $DOCKERHUB_USER/notes-app:$CI_COMMIT_SHA .
+    - mkdir d-image
+    - docker save $DOCKERHUB_USER/notes-app:n2 -o d-image/notes-app.tar
+  artifacts:
+    paths:
+      - d-image/
+    expire_in: 1 week
+  retry: 2
+
+linting_test_job:
+  stage: test
+  image: python:3.11-bookworm
+  before_script:
+    - echo "before jobs start"
+    #- sudo apt-get update the reason to comment it ---->  WITHOUT python image - then you'd NEED this mess
+    - pip install --upgrade pip
+    - pip install --no-cache-dir -r requirements.txt
+  script: 
+    - pip install ruff
+    - ruff check .
+  retry: 2  
+  needs: []   #needs means This job needs nothing from previous stages. Run it immediately."
+
+unit_test_job:
+  stage: test 
+  # Removed dependencies - tests don't need build artifacts
+  image: python:3.11-bookworm
+  services:
+    - name: mysql:8
+      alias: db_cont
+  variables:
+    DB_NAME: test_db
+    DB_USER: root
+    DB_PASSWORD: root
+    DB_HOST: db_cont
+    DB_PORT: 3306 
+    MYSQL_ROOT_PASSWORD: root
+    MYSQL_DATABASE: test_db 
+  before_script:
+    - echo "before script start"
+    - apt-get update
+    - apt-get install -y gcc python3-dev default-libmysqlclient-dev pkg-config build-essential libmariadb-dev libmariadb-dev-compat default-mysql-client
+    - until mysqladmin ping -h "$DB_HOST" -u root -proot --silent; do echo "Waiting for MySQL..."; sleep 2; done
+    - pip install --upgrade pip setuptools wheel
+    - pip install --no-cache-dir mysqlclient pytest pytest-django
+    - pip install --no-cache-dir -r requirements.txt
+  script:
+    - pytest
+  retry: 1
+
+push_job:
+  stage: push
+  script:
+    - docker load -i d-image/notes-app.tar
+    - echo "$DOCKERHUB_PASS" | docker login -u "$DOCKERHUB_USER" --password-stdin
+    - docker push $DOCKERHUB_USER/notes-app:n2
+
+deploy_job:
+  stage: deploy
+  script:
+    - docker compose up -d
+  retry: 1
+
